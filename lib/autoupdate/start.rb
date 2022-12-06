@@ -135,7 +135,83 @@ module Autoupdate
       FileUtils.chmod 0555, Autoupdate::Core.location/"brew_autoupdate"
     end
 
-    interval ||= "86400"
+    if interval.present? && args.cron.present?
+      opoo <<~EOS
+        Not use --cron option with interval value.
+      EOS
+    end
+
+    start_interval = if !interval.present? && args.cron.present?
+      interval_dict = case args.cron
+      when "@hourly"
+        <<~EOS
+              <key>Minute</key>
+              <integer>0</integer>
+        EOS
+      when "@daily"
+        <<~EOS
+              <key>Minute</key>
+              <integer>0</integer>
+              <key>Hour</key>
+              <integer>0</integer>
+        EOS
+      when "@weekly"
+        <<~EOS
+              <key>Minute</key>
+              <integer>0</integer>
+              <key>Hour</key>
+              <integer>0</integer>
+              <key>Weekday</key>
+              <integer>0</integer>
+        EOS
+      when "@monthly"
+        <<~EOS
+              <key>Minute</key>
+              <integer>0</integer>
+              <key>Hour</key>
+              <integer>0</integer>
+              <key>Day</key>
+              <integer>1</integer>
+        EOS
+      when "@yearly", "@annually"
+        <<~EOS
+              <key>Minute</key>
+              <integer>0</integer>
+              <key>Hour</key>
+              <integer>0</integer>
+              <key>Day</key>
+              <integer>1</integer>
+              <key>Month</key>
+              <integer>1</integer>
+        EOS
+      else
+        cron_parts = args.cron.split
+        raise TypeError, "Service#parse_cron expects a valid cron syntax" if cron_parts.length != 5
+
+        [:Minute, :Hour, :Day, :Month, :Weekday].map.with_index do |selector, index|
+          if cron_parts.fetch(index) != "*"
+            <<~EOS
+                  <key>#{selector}</key>
+                  <integer>#{Integer(cron_parts.fetch(index))}</integer>
+            EOS
+          end
+        end.compact.join("")
+      end
+
+      <<~EOS
+        <key>StartCalendarInterval</key>
+          <dict>
+        #{interval_dict.chomp}
+          </dict>
+      EOS
+    else
+      interval ||= 86400
+
+      <<~EOS
+        <key>StartInterval</key>
+        <integer>#{interval}</integer>
+      EOS
+    end
 
     # This restores the "Run At Load" key removed in a7de771abcf6 when requested.
     launch_immediately = if args.immediate?
@@ -165,8 +241,7 @@ module Autoupdate
         <string>#{log_out}</string>
         <key>StandardOutPath</key>
         <string>#{log_out}</string>
-        <key>StartInterval</key>
-        <integer>#{interval}</integer>
+        #{start_interval.chomp}
         <key>LowPriorityBackgroundIO</key>
         <true/>
         <key>LowPriorityIO</key>

@@ -35,6 +35,8 @@ module Homebrew
         `brew autoupdate version`:
         Output this tool's current version, and a short changelog.
       EOS
+      flag "--cron=",
+           description: "Calender interval value via cron format. Must be passed with `start`."
       switch "--upgrade",
              description: "Automatically upgrade your installed formulae. If the Caskroom exists locally " \
                           "Casks will be upgraded as well. Must be passed with `start`."
